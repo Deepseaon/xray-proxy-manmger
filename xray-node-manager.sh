@@ -85,6 +85,38 @@ add_node() {
     if $SCRIPT_DIR/xray-config-generator.sh "$link" "$node_file"; then
         print_success "Node '$name' added successfully"
         print_info "Config saved to: $node_file"
+
+        # Ask if user wants to use this node immediately
+        echo ""
+        read -p "Use this node as active configuration? (y/n): " use_now
+        if [[ "$use_now" == "y" || "$use_now" == "Y" ]]; then
+            # Copy to active config
+            if [[ -f "$ACTIVE_CONFIG" ]]; then
+                cp "$ACTIVE_CONFIG" "${ACTIVE_CONFIG}.backup"
+                print_info "Backed up current config"
+            fi
+            cp "$node_file" "$ACTIVE_CONFIG"
+            echo "$name" > "$CURRENT_NODE_FILE"
+            print_success "Node '$name' is now active"
+            print_info "Active config: $ACTIVE_CONFIG"
+
+            # Restart xray if running
+            if systemctl is-active --quiet "$XRAY_SERVICE" 2>/dev/null; then
+                read -p "Restart xray service now? (y/n): " restart_now
+                if [[ "$restart_now" == "y" || "$restart_now" == "Y" ]]; then
+                    systemctl restart "$XRAY_SERVICE"
+                    sleep 1
+                    if systemctl is-active --quiet "$XRAY_SERVICE"; then
+                        print_success "Xray service restarted"
+                    else
+                        print_error "Failed to restart xray service"
+                    fi
+                fi
+            fi
+        else
+            print_info "Node saved but not activated"
+            print_info "Activate it with: $0 switch $name"
+        fi
     else
         print_error "Failed to generate configuration"
         return 1
