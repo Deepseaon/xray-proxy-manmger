@@ -31,7 +31,7 @@ echo -e "${NC}"
 
 # GitHub 仓库配置
 GITHUB_USER="${GITHUB_USER:-Deepseaon}"  
-GITHUB_REPO="${GITHUB_REPO:-xray-proxy-manmger}"   
+GITHUB_REPO="${GITHUB_REPO:-xray-proxy-manager}"   
 GITHUB_BRANCH="${GITHUB_BRANCH:-main}"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/manager"
 
