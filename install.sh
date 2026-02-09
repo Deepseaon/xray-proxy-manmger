@@ -182,61 +182,6 @@ else
     print_success "所有依赖已安装"
 fi
 
-# 检查并安装 tun2socks
-echo ""
-print_info "检查 tun2socks..."
-if command -v tun2socks &> /dev/null; then
-    print_success "tun2socks 已安装"
-else
-    print_warning "tun2socks 未安装"
-    print_info "tun2socks 用于透明代理功能"
-    read -p "是否自动安装 tun2socks? (y/n): " install_tun2socks
-
-    if [[ "$install_tun2socks" == "y" || "$install_tun2socks" == "Y" ]]; then
-        print_info "正在下载 tun2socks..."
-
-        # 检测系统架构
-        ARCH=$(uname -m)
-        case $ARCH in
-            x86_64)
-                TUN2SOCKS_ARCH="amd64"
-                ;;
-            aarch64|arm64)
-                TUN2SOCKS_ARCH="arm64"
-                ;;
-            armv7l)
-                TUN2SOCKS_ARCH="armv7"
-                ;;
-            *)
-                print_error "不支持的架构: $ARCH"
-                print_info "请手动安装 tun2socks"
-                TUN2SOCKS_ARCH=""
-                ;;
-        esac
-
-        if [[ -n "$TUN2SOCKS_ARCH" ]]; then
-            TUN2SOCKS_VERSION="v2.5.2"
-            TUN2SOCKS_URL="https://github.com/xjasonlyu/tun2socks/releases/download/${TUN2SOCKS_VERSION}/tun2socks-linux-${TUN2SOCKS_ARCH}.zip"
-
-            cd /tmp
-            if curl -fsSL "$TUN2SOCKS_URL" -o tun2socks.zip; then
-                unzip -o tun2socks.zip
-                chmod +x tun2socks-linux-${TUN2SOCKS_ARCH}
-                mv tun2socks-linux-${TUN2SOCKS_ARCH} /usr/local/bin/tun2socks
-                rm -f tun2socks.zip
-                print_success "tun2socks 安装成功"
-            else
-                print_error "下载失败"
-                print_info "请手动安装: https://github.com/xjasonlyu/tun2socks/releases"
-            fi
-        fi
-    else
-        print_info "跳过 tun2socks 安装"
-        print_info "透明代理功能将不可用"
-        print_info "稍后可手动安装: https://github.com/xjasonlyu/tun2socks/releases"
-    fi
-fi
-
 # 安装完成
 echo ""
 echo -e "${GREEN}╔═══════════════════════════════════════╗${NC}"
