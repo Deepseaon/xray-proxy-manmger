@@ -38,14 +38,14 @@
 
 ```bash
 # 下载并运行安装脚本
-curl -fsSL https://raw.githubusercontent.com/Deepseaon/xray-proxy-manmger/main/manager/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/Deepseaon/xray-proxy-manmger/install.sh | sudo bash
 ```
 
 或者手动安装：
 
 ```bash
 # 下载安装脚本
-curl -fsSL https://raw.githubusercontent.com/Deepseaon/xray-proxy-manmger/main/manager/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/Deepseaon/xray-proxy-manmger/install.sh -o install.sh
 
 # 运行安装
 chmod +x install.sh
@@ -291,7 +291,7 @@ sudo vi /usr/local/etc/xray/tproxy-bypass.conf
 
 ```bash
 # 重新运行安装脚本即可
-curl -fsSL https://raw.githubusercontent.com/Deepseaon/xray-proxy-manmger/main/manager/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/Deepseaon/xray-proxy-manmger/install.sh | sudo bash
 ```
 
 ### Q5: 如何卸载？
