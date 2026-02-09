@@ -33,7 +33,7 @@ echo -e "${NC}"
 GITHUB_USER="${GITHUB_USER:-Deepseaon}"  
 GITHUB_REPO="${GITHUB_REPO:-xray-proxy-manager}"   
 GITHUB_BRANCH="${GITHUB_BRANCH:-main}"
-GITHUB_RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/manager"
+GITHUB_RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}"
 
 # 安装目录
 INSTALL_DIR="/opt/xray-manager"
