@@ -244,8 +244,8 @@ enable_transparent_proxy() {
     # Set default route through tun1
     print_info "Setting default route through tun1..."
     ip route del default 2>/dev/null || true
-    ip route add default via 198.18.0.1 dev tun1 metric 1
-    ip route add default via "$default_gw" dev "$default_iface" metric 10
+    ip route add default via 198.18.0.1 dev tun1 metric 1 2>/dev/null || true
+    ip route add default via "$default_gw" dev "$default_iface" metric 10 2>/dev/null || true
 
     # Start tun2socks in background
     print_info "Starting tun2socks..."
