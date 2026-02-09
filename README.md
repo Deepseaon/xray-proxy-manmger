@@ -1,4 +1,4 @@
-# Xray Manager - Xray 代理管理工具
+# Xray Proxy Manager - Xray 代理管理工具
 
 <div align="center">
 
