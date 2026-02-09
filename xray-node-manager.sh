@@ -4,6 +4,8 @@
 # 管理多个节点配置并支持切换
 
 set -e
+n# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colors
 RED='\033[0;31m'
@@ -67,14 +69,14 @@ add_node() {
     print_info "Generating configuration for node: $name"
 
     # Check if config generator exists
-    if [[ ! -f "./xray-config-generator.sh" ]]; then
+    if [[ ! -f "$SCRIPT_DIR/xray-config-generator.sh" ]]; then
         print_error "xray-config-generator.sh not found"
         print_info "Make sure xray-config-generator.sh is in the current directory"
         return 1
     fi
 
     # Generate config
-    if ./xray-config-generator.sh "$link" "$node_file"; then
+    if $SCRIPT_DIR/xray-config-generator.sh "$link" "$node_file"; then
         print_success "Node '$name' added successfully"
         print_info "Config saved to: $node_file"
     else

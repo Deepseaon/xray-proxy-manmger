@@ -4,6 +4,8 @@
 # Version: 2.0.0
 
 set -e
+n# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colors
 RED='\033[0;31m'
@@ -316,8 +318,8 @@ start_with_proxy() {
         read -p "Enter choice [1-2]: " node_choice
 
         if [[ "$node_choice" == "2" ]]; then
-            if [[ -f "./xray-node-manager.sh" ]]; then
-                ./xray-node-manager.sh select
+            if [[ -f "$SCRIPT_DIR/xray-node-manager.sh" ]]; then
+                $SCRIPT_DIR/xray-node-manager.sh select
                 if [[ $? -ne 0 ]]; then
                     print_error "Node selection failed"
                     exit 1
@@ -330,7 +332,7 @@ start_with_proxy() {
 
     if [[ ! -f "$XRAY_CONFIG_FILE" ]]; then
         print_error "Configuration file not found: $XRAY_CONFIG_FILE"
-        print_info "Add a node with: ./xray-node-manager.sh add \"vless://...\""
+        print_info "Add a node with: $SCRIPT_DIR/xray-node-manager.sh add \"vless://...\""
         exit 1
     fi
 
@@ -571,57 +573,57 @@ main() {
             check_proxy_status
             ;;
         node-add)
-            if [[ -f "./xray-node-manager.sh" ]]; then
+            if [[ -f "$SCRIPT_DIR/xray-node-manager.sh" ]]; then
                 shift
-                ./xray-node-manager.sh add "$@"
+                $SCRIPT_DIR/xray-node-manager.sh add "$@"
             else
                 print_error "xray-node-manager.sh not found"
                 exit 1
             fi
             ;;
         node-list)
-            if [[ -f "./xray-node-manager.sh" ]]; then
-                ./xray-node-manager.sh list
+            if [[ -f "$SCRIPT_DIR/xray-node-manager.sh" ]]; then
+                $SCRIPT_DIR/xray-node-manager.sh list
             else
                 print_error "xray-node-manager.sh not found"
                 exit 1
             fi
             ;;
         node-select)
-            if [[ -f "./xray-node-manager.sh" ]]; then
-                ./xray-node-manager.sh select
+            if [[ -f "$SCRIPT_DIR/xray-node-manager.sh" ]]; then
+                $SCRIPT_DIR/xray-node-manager.sh select
             else
                 print_error "xray-node-manager.sh not found"
                 exit 1
             fi
             ;;
         node-switch)
-            if [[ -f "./xray-node-manager.sh" ]]; then
+            if [[ -f "$SCRIPT_DIR/xray-node-manager.sh" ]]; then
                 if [[ -z "$2" ]]; then
                     print_error "Please provide a node name"
                     exit 1
                 fi
-                ./xray-node-manager.sh switch "$2"
+                $SCRIPT_DIR/xray-node-manager.sh switch "$2"
             else
                 print_error "xray-node-manager.sh not found"
                 exit 1
             fi
             ;;
         node-delete)
-            if [[ -f "./xray-node-manager.sh" ]]; then
+            if [[ -f "$SCRIPT_DIR/xray-node-manager.sh" ]]; then
                 if [[ -z "$2" ]]; then
                     print_error "Please provide a node name"
                     exit 1
                 fi
-                ./xray-node-manager.sh delete "$2"
+                $SCRIPT_DIR/xray-node-manager.sh delete "$2"
             else
                 print_error "xray-node-manager.sh not found"
                 exit 1
             fi
             ;;
         node-current)
-            if [[ -f "./xray-node-manager.sh" ]]; then
-                ./xray-node-manager.sh current
+            if [[ -f "$SCRIPT_DIR/xray-node-manager.sh" ]]; then
+                $SCRIPT_DIR/xray-node-manager.sh current
             else
                 print_error "xray-node-manager.sh not found"
                 exit 1
@@ -646,9 +648,9 @@ main() {
             ;;
         route-mode)
             # Call routing mode script
-            if [[ -f "./xray-routing-mode.sh" ]]; then
+            if [[ -f "$SCRIPT_DIR/xray-routing-mode.sh" ]]; then
                 shift
-                ./xray-routing-mode.sh "$@"
+                $SCRIPT_DIR/xray-routing-mode.sh "$@"
             else
                 print_error "xray-routing-mode.sh not found in current directory"
                 print_info "Make sure xray-routing-mode.sh is in the same directory"
@@ -656,8 +658,8 @@ main() {
             fi
             ;;
         route-status)
-            if [[ -f "./xray-routing-mode.sh" ]]; then
-                ./xray-routing-mode.sh status
+            if [[ -f "$SCRIPT_DIR/xray-routing-mode.sh" ]]; then
+                $SCRIPT_DIR/xray-routing-mode.sh status
             else
                 print_error "xray-routing-mode.sh not found"
                 exit 1
