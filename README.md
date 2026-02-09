@@ -8,8 +8,8 @@
 
 一套功能完整的 Xray 代理管理工具，专为 Linux 服务器设计
 
-[![GitHub stars](https://img.shields.io/github/stars/your-username/xray-manager.svg?style=social&label=Star)](https://github.com/your-username/xray-manager)
-[![GitHub forks](https://img.shields.io/github/forks/your-username/xray-manager.svg?style=social&label=Fork)](https://github.com/your-username/xray-manager/fork)
+[![GitHub stars](https://img.shields.io/github/stars/Deepseaon/xray-proxy-manmger.svg?style=social&label=Star)](https://github.com/your-username/xray-manager)
+[![GitHub forks](https://img.shields.io/github/forks/Deepseaon/xray-proxy-manmger.svg?style=social&label=Fork)](https://github.com/your-username/xray-manager/fork)
 
 [功能特性](#功能特性) • [快速开始](#快速开始) • [使用文档](#使用文档) • [常见问题](#常见问题)
 
