@@ -4,7 +4,7 @@
 # Version: 2.0.0
 
 set -e
-n# Get script directory
+# Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colors
@@ -144,7 +144,7 @@ apply_bypass_rules() {
     for user in "${BYPASS_USERS[@]}"; do
         if id "$user" &>/dev/null; then
             local uid=$(id -u "$user")
-            iptables -t mangle -A XRAY -m owner --uid-owner "$uid" -j RETURN
+            iptables -t nat -A XRAY -m owner --uid-owner "$uid" -j RETURN
             print_info "Bypass rule added for user: $user (UID: $uid)"
             ((rule_count++))
         else
@@ -154,30 +154,30 @@ apply_bypass_rules() {
 
     # Bypass by UID
     for uid in "${BYPASS_UIDS[@]}"; do
-        iptables -t mangle -A XRAY -m owner --uid-owner "$uid" -j RETURN
+        iptables -t nat -A XRAY -m owner --uid-owner "$uid" -j RETURN
         print_info "Bypass rule added for UID: $uid"
         ((rule_count++))
     done
 
     # Bypass by destination IP
     for ip in "${BYPASS_IPS[@]}"; do
-        iptables -t mangle -A XRAY -d "$ip" -j RETURN
+        iptables -t nat -A XRAY -d "$ip" -j RETURN
         print_info "Bypass rule added for IP: $ip"
         ((rule_count++))
     done
 
     # Bypass by destination port
     for port in "${BYPASS_PORTS[@]}"; do
-        iptables -t mangle -A XRAY -p tcp --dport "$port" -j RETURN
-        iptables -t mangle -A XRAY -p udp --dport "$port" -j RETURN
+        iptables -t nat -A XRAY -p tcp --dport "$port" -j RETURN
+        iptables -t nat -A XRAY -p udp --dport "$port" -j RETURN
         print_info "Bypass rule added for port: $port"
         ((rule_count++))
     done
 
     # Bypass by source port
     for port in "${BYPASS_SOURCE_PORTS[@]}"; do
-        iptables -t mangle -A XRAY -p tcp --sport "$port" -j RETURN
-        iptables -t mangle -A XRAY -p udp --sport "$port" -j RETURN
+        iptables -t nat -A XRAY -p tcp --sport "$port" -j RETURN
+        iptables -t nat -A XRAY -p udp --sport "$port" -j RETURN
         print_info "Bypass rule added for source port: $port"
         ((rule_count++))
     done
@@ -205,48 +205,41 @@ enable_transparent_proxy() {
     sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
 
     # Create new chain
-    iptables -t mangle -N XRAY 2>/dev/null || iptables -t mangle -F XRAY
+    iptables -t nat -N XRAY 2>/dev/null || iptables -t nat -F XRAY
 
     # Apply custom bypass rules first
     apply_bypass_rules
 
     # Bypass local and reserved addresses
-    iptables -t mangle -A XRAY -d 0.0.0.0/8 -j RETURN
-    iptables -t mangle -A XRAY -d 10.0.0.0/8 -j RETURN
-    iptables -t mangle -A XRAY -d 127.0.0.0/8 -j RETURN
-    iptables -t mangle -A XRAY -d 169.254.0.0/16 -j RETURN
-    iptables -t mangle -A XRAY -d 172.16.0.0/12 -j RETURN
-    iptables -t mangle -A XRAY -d 192.168.0.0/16 -j RETURN
-    iptables -t mangle -A XRAY -d 224.0.0.0/4 -j RETURN
-    iptables -t mangle -A XRAY -d 240.0.0.0/4 -j RETURN
+    iptables -t nat -A XRAY -d 0.0.0.0/8 -j RETURN
+    iptables -t nat -A XRAY -d 10.0.0.0/8 -j RETURN
+    iptables -t nat -A XRAY -d 127.0.0.0/8 -j RETURN
+    iptables -t nat -A XRAY -d 169.254.0.0/16 -j RETURN
+    iptables -t nat -A XRAY -d 172.16.0.0/12 -j RETURN
+    iptables -t nat -A XRAY -d 192.168.0.0/16 -j RETURN
+    iptables -t nat -A XRAY -d 224.0.0.0/4 -j RETURN
+    iptables -t nat -A XRAY -d 240.0.0.0/4 -j RETURN
 
-    # Mark packets for transparent proxy
-    iptables -t mangle -A XRAY -p tcp -j TPROXY --on-port ${TPROXY_PORT} --tproxy-mark ${TPROXY_MARK}
-    iptables -t mangle -A XRAY -p udp -j TPROXY --on-port ${TPROXY_PORT} --tproxy-mark ${TPROXY_MARK}
+    # Redirect packets to transparent proxy port
+    iptables -t nat -A XRAY -p tcp -j REDIRECT --to-ports ${TPROXY_PORT}
 
-    # Apply to PREROUTING
-    iptables -t mangle -A PREROUTING -j XRAY
+    # Apply to PREROUTING (for forwarded traffic)
+    iptables -t nat -A PREROUTING -j XRAY
 
-    # Apply to OUTPUT for local traffic
-    iptables -t mangle -A OUTPUT -j XRAY
-
-    # Setup routing
-    ip rule add fwmark ${TPROXY_MARK} table 100 2>/dev/null || true
-    ip route add local 0.0.0.0/0 dev lo table 100 2>/dev/null || true
+    # Apply to OUTPUT (for local traffic)
+    iptables -t nat -A OUTPUT -j XRAY
 
     # IPv6 support (optional)
     if command -v ip6tables &> /dev/null; then
-        ip6tables -t mangle -N XRAY 2>/dev/null || ip6tables -t mangle -F XRAY
-        ip6tables -t mangle -A XRAY -p tcp -j TPROXY --on-port ${TPROXY_PORT} --tproxy-mark ${TPROXY_MARK}
-        ip6tables -t mangle -A XRAY -p udp -j TPROXY --on-port ${TPROXY_PORT} --tproxy-mark ${TPROXY_MARK}
-        ip6tables -t mangle -A PREROUTING -j XRAY
-        ip -6 rule add fwmark ${TPROXY_MARK} table 100 2>/dev/null || true
-        ip -6 route add local ::/0 dev lo table 100 2>/dev/null || true
+        ip6tables -t nat -N XRAY 2>/dev/null || ip6tables -t nat -F XRAY
+        ip6tables -t nat -A XRAY -p tcp -j REDIRECT --to-ports ${TPROXY_PORT}
+        ip6tables -t nat -A PREROUTING -j XRAY
+        ip6tables -t nat -A OUTPUT -j XRAY
     fi
 
     echo "tproxy-enabled" > "${PROXY_STATE_FILE}.tproxy"
     print_success "Transparent proxy enabled"
-    print_info "All TCP/UDP traffic will be proxied through port ${TPROXY_PORT}"
+    print_info "All TCP traffic will be proxied through port ${TPROXY_PORT}"
 }
 
 disable_transparent_proxy() {
@@ -254,23 +247,18 @@ disable_transparent_proxy() {
     print_info "Disabling transparent proxy..."
 
     # Remove iptables rules
-    iptables -t mangle -D PREROUTING -j XRAY 2>/dev/null || true
-    iptables -t mangle -D OUTPUT -j XRAY 2>/dev/null || true
-    iptables -t mangle -F XRAY 2>/dev/null || true
-    iptables -t mangle -X XRAY 2>/dev/null || true
+    iptables -t nat -D PREROUTING -j XRAY 2>/dev/null || true
+    iptables -t nat -D OUTPUT -j XRAY 2>/dev/null || true
+    iptables -t nat -F XRAY 2>/dev/null || true
+    iptables -t nat -X XRAY 2>/dev/null || true
 
     # Remove IPv6 rules
     if command -v ip6tables &> /dev/null; then
-        ip6tables -t mangle -D PREROUTING -j XRAY 2>/dev/null || true
-        ip6tables -t mangle -F XRAY 2>/dev/null || true
-        ip6tables -t mangle -X XRAY 2>/dev/null || true
+        ip6tables -t nat -D PREROUTING -j XRAY 2>/dev/null || true
+        ip6tables -t nat -D OUTPUT -j XRAY 2>/dev/null || true
+        ip6tables -t nat -F XRAY 2>/dev/null || true
+        ip6tables -t nat -X XRAY 2>/dev/null || true
     fi
-
-    # Remove routing rules
-    ip rule del fwmark ${TPROXY_MARK} table 100 2>/dev/null || true
-    ip route del local 0.0.0.0/0 dev lo table 100 2>/dev/null || true
-    ip -6 rule del fwmark ${TPROXY_MARK} table 100 2>/dev/null || true
-    ip -6 route del local ::/0 dev lo table 100 2>/dev/null || true
 
     rm -f "${PROXY_STATE_FILE}.tproxy"
     print_success "Transparent proxy disabled"
@@ -294,7 +282,7 @@ check_proxy_status() {
         echo -e "Transparent Proxy: ${GREEN}Enabled${NC}"
         echo "  TPROXY Port: ${TPROXY_PORT}"
         echo "  Active iptables rules:"
-        iptables -t mangle -L XRAY -n --line-numbers 2>/dev/null | head -n 10
+        iptables -t nat -L XRAY -n --line-numbers 2>/dev/null | head -n 10
     else
         echo -e "Transparent Proxy: ${RED}Disabled${NC}"
     fi

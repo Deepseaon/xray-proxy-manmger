@@ -58,12 +58,6 @@ generate_complete_config() {
       "sniffing": {
         "enabled": true,
         "destOverride": ["http", "tls"]
-      },
-      "streamSettings": {
-        "sockopt": {
-          "tproxy": "tproxy",
-          "mark": 1
-        }
       }
     }
   ],
