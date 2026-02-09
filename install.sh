@@ -22,7 +22,7 @@ print_error() { echo -e "${RED}[错误]${NC} $1"; }
 echo -e "${CYAN}"
 cat << "EOF"
 ╔═══════════════════════════════════════╗
-║   Xray 管理工具 - 一键安装脚本          ║
+║   Xray 管理工具 - 一键安装脚本         ║
 ║   Version: 2.0.0  by Deepseaon        ║
 ║         silverisky.com                ║
 ╚═══════════════════════════════════════╝
@@ -80,14 +80,10 @@ else
 fi
 
 # 下载文件
-# 定义随机参数（时间戳），强制绕过 GitHub CDN 缓存
-CACHE_BUSTER="?v=$(date +%s)"
-
 for file in "${REQUIRED_FILES[@]}"; do
     print_info "下载: $file"
 
-    # 拼接 URL 时加入缓存刷新参数
-    FULL_URL="${GITHUB_RAW_URL}/${file}${CACHE_BUSTER}"
+    FULL_URL="${GITHUB_RAW_URL}/${file}"
 
     if ! $DOWNLOAD_CMD "$FULL_URL" > "$TEMP_DIR/$file"; then
         print_error "下载失败: $file"
