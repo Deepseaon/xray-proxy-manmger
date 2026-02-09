@@ -138,7 +138,7 @@ parse_vless() {
 
     # Parse query parameters
     local encryption="" flow="" security="" sni="" fp="" alpn="" type="" host="" path="" mode=""
-    local insecure="false" ech=""
+    local insecure="false" ech="" pbk="" sid="" spx="" pqv=""
 
     IFS='&' read -ra PARAMS <<< "$params"
     for param in "${PARAMS[@]}"; do
@@ -160,6 +160,10 @@ parse_vless() {
                 [[ "$value" == "1" ]] && insecure="true"
                 ;;
             ech) ech="$value" ;;
+            pbk) pbk="$value" ;;
+            sid) sid="$value" ;;
+            spx) spx="$value" ;;
+            pqv) pqv="$value" ;;
         esac
     done
 
@@ -175,13 +179,9 @@ parse_vless() {
         "port": $port,
         "users": [
           {
-            "id": "$uuid",$(
-            if [[ -n "$flow" ]]; then
-                echo ""
-                echo "            \"email\": \"user@example.com\","
-                echo "            \"security\": \"auto\","
-            fi
-            )
+            "id": "$uuid",
+            "email": "user@example.com",
+            "security": "auto",
             "encryption": "${encryption:-none}"$(
             if [[ -n "$flow" ]]; then
                 echo ","
@@ -213,6 +213,23 @@ $(
             echo "      ,\"echConfigList\": \"$ech\""
             echo "      ,\"echForceQuery\": \"full\""
         fi
+        echo "    },"
+    fi
+)$(
+    if [[ "$security" == "reality" ]]; then
+        echo "    \"security\": \"reality\","
+        echo "    \"realitySettings\": {"
+        [[ -n "$sni" ]] && echo "      \"serverName\": \"$sni\","
+        [[ -n "$fp" ]] && echo "      \"fingerprint\": \"$fp\","
+        echo "      \"show\": false,"
+        [[ -n "$pbk" ]] && echo "      \"publicKey\": \"$pbk\","
+        [[ -n "$sid" ]] && echo "      \"shortId\": \"$sid\","
+        [[ -n "$spx" ]] && echo "      \"spiderX\": \"$spx\"$(
+        if [[ -n "$pqv" ]]; then
+            echo ","
+        fi
+        )"
+        [[ -n "$pqv" ]] && echo "      \"mldsa65Verify\": \"$pqv\""
         echo "    },"
     fi
 )$(
