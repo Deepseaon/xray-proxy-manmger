@@ -59,64 +59,43 @@ REQUIRED_FILES=(
     "tproxy-bypass.conf"
 )
 
-# 检查是否在本地目录（开发模式）
-LOCAL_MODE=false
-if [[ -f "xray-proxy-manager.sh" ]]; then
-    print_info "检测到本地文件，使用本地安装模式"
-    LOCAL_MODE=true
-fi
-
 # 创建临时目录
 TEMP_DIR=$(mktemp -d)
 trap "rm -rf $TEMP_DIR" EXIT
 
-if [[ "$LOCAL_MODE" == "true" ]]; then
-    # 本地安装模式
-    print_info "从本地目录复制文件..."
+# 从 GitHub 下载
+print_info "从 GitHub 仓库下载文件..."
+print_info "仓库: ${GITHUB_USER}/${GITHUB_REPO}"
+echo ""
 
-    for file in "${REQUIRED_FILES[@]}"; do
-        if [[ ! -f "$file" ]]; then
-            print_error "缺少文件: $file"
-            exit 1
-        fi
-        cp "$file" "$TEMP_DIR/"
-        echo "  ✓ $file"
-    done
+# 检查 curl 或 wget
+if command -v curl &> /dev/null; then
+    DOWNLOAD_CMD="curl -fsSL"
+elif command -v wget &> /dev/null; then
+    DOWNLOAD_CMD="wget -qO-"
 else
-    # 从 GitHub 下载
-    print_info "从 GitHub 仓库下载文件..."
-    print_info "仓库: ${GITHUB_USER}/${GITHUB_REPO}"
-    echo ""
-
-    # 检查 curl 或 wget
-    if command -v curl &> /dev/null; then
-        DOWNLOAD_CMD="curl -fsSL"
-    elif command -v wget &> /dev/null; then
-        DOWNLOAD_CMD="wget -qO-"
-    else
-        print_error "需要 curl 或 wget 来下载文件"
-        print_info "请安装: sudo apt install curl"
-        exit 1
-    fi
+    print_error "需要 curl 或 wget 来下载文件"
+    print_info "请安装: sudo apt install curl"
+    exit 1
+fi
 
 # 下载文件
-    # 定义随机参数（时间戳），强制绕过 GitHub CDN 缓存
-    CACHE_BUSTER="?v=$(date +%s)"
+# 定义随机参数（时间戳），强制绕过 GitHub CDN 缓存
+CACHE_BUSTER="?v=$(date +%s)"
 
-    for file in "${REQUIRED_FILES[@]}"; do
-        print_info "下载: $file"
-        
-        # 拼接 URL 时加入缓存刷新参数
-        FULL_URL="${GITHUB_RAW_URL}/${file}${CACHE_BUSTER}"
-        
-        if ! $DOWNLOAD_CMD "$FULL_URL" > "$TEMP_DIR/$file"; then
-            print_error "下载失败: $file"
-            print_info "报错请求地址: $FULL_URL"
-            exit 1
-        fi
-        echo "  ✓ 下载完成"
-    done
-fi
+for file in "${REQUIRED_FILES[@]}"; do
+    print_info "下载: $file"
+
+    # 拼接 URL 时加入缓存刷新参数
+    FULL_URL="${GITHUB_RAW_URL}/${file}${CACHE_BUSTER}"
+
+    if ! $DOWNLOAD_CMD "$FULL_URL" > "$TEMP_DIR/$file"; then
+        print_error "下载失败: $file"
+        print_info "请求地址: $FULL_URL"
+        exit 1
+    fi
+    echo "  ✓ 下载完成"
+done
 
 print_success "文件准备完成"
 echo ""

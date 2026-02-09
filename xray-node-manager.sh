@@ -4,7 +4,7 @@
 # 管理多个节点配置并支持切换
 
 set -e
-n# Get script directory
+# Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colors
