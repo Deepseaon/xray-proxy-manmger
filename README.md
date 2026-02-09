@@ -1,4 +1,4 @@
-# Xray Proxy Manager - Linux cli 代理管理工具
+# Xray Proxy Manager - Xray 代理管理工具
 
 <div align="center">
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
