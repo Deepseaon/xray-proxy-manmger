@@ -29,8 +29,8 @@ EOF
 echo -e "${NC}"
 
 # GitHub 仓库配置
-GITHUB_USER="${GITHUB_USER:-Deepseaon}"  # 替换为你的 GitHub 用户名
-GITHUB_REPO="${GITHUB_REPO:-xray-proxy-manmger}"   # 替换为你的仓库名
+GITHUB_USER="${GITHUB_USER:-Deepseaon}"  
+GITHUB_REPO="${GITHUB_REPO:-xray-proxy-manmger}"   
 GITHUB_BRANCH="${GITHUB_BRANCH:-main}"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/manager"
 
