@@ -207,21 +207,39 @@ enable_transparent_proxy() {
     # Load bypass configuration
     load_bypass_config
 
-    # Pre-resolve DNS servers to avoid circular dependency with ECH
-    print_info "Pre-resolving DNS servers for ECH compatibility..."
-    local dns_domains=("dns.alidns.com" "dns.cloudflare.com" "dns.google" "one.one.one.one")
-    for domain in "${dns_domains[@]}"; do
-        if getent hosts "$domain" > /dev/null 2>&1; then
-            print_info "Resolved: $domain"
-        fi
-    done
-
     # Enable IP forwarding
     sysctl -w net.ipv4.ip_forward=1 > /dev/null
     sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
 
     # Create new chain
     iptables -t nat -N XRAY 2>/dev/null || iptables -t nat -F XRAY
+
+    # Pre-resolve and bypass DNS servers for ECH compatibility
+    print_info "Pre-resolving and bypassing DNS servers for ECH compatibility..."
+    local dns_domains=("dns.alidns.com" "dns.cloudflare.com" "dns.google" "one.one.one.one")
+    for domain in "${dns_domains[@]}"; do
+        # Resolve domain and extract IPs
+        local ips=$(getent hosts "$domain" 2>/dev/null | awk '{print $1}' | sort -u)
+        if [[ -n "$ips" ]]; then
+            print_info "Resolved $domain:"
+            while IFS= read -r ip; do
+                # Add bypass rule for each resolved IP on port 443 (DoH)
+                if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    # IPv4
+                    iptables -t nat -A XRAY -d "$ip" -p tcp --dport 443 -j RETURN
+                    iptables -t nat -A XRAY -d "$ip" -p udp --dport 443 -j RETURN
+                    print_info "  - Bypassing IPv4: $ip"
+                elif [[ "$ip" =~ : ]]; then
+                    # IPv6
+                    if command -v ip6tables &> /dev/null; then
+                        ip6tables -t nat -A XRAY -d "$ip" -p tcp --dport 443 -j RETURN 2>/dev/null || true
+                        ip6tables -t nat -A XRAY -d "$ip" -p udp --dport 443 -j RETURN 2>/dev/null || true
+                        print_info "  - Bypassing IPv6: $ip"
+                    fi
+                fi
+            done <<< "$ips"
+        fi
+    done
 
     # Bypass xray's own traffic (by destination port to proxy server)
     local proxy_server=$(grep -oP '"address":\s*"\K[^"]+' "$XRAY_CONFIG_FILE" | head -1)
