@@ -22,8 +22,9 @@ print_error() { echo -e "${RED}[错误]${NC} $1"; }
 echo -e "${CYAN}"
 cat << "EOF"
 ╔═══════════════════════════════════════╗
-║   Xray 管理工具 - 一键安装脚本        ║
-║   Version: 2.0.0                      ║
+║   Xray 管理工具 - 一键安装脚本          ║
+║   Version: 2.0.0  by Deepseaon        ║
+║         silverisky.com                ║
 ╚═══════════════════════════════════════╝
 EOF
 echo -e "${NC}"
