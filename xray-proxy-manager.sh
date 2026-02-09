@@ -245,8 +245,8 @@ enable_transparent_proxy() {
     iptables -t nat -A XRAY -d 224.0.0.0/4 -j RETURN
     iptables -t nat -A XRAY -d 240.0.0.0/4 -j RETURN
 
-    # Redirect TCP traffic to SOCKS5 port (using REDIRECT for local traffic)
-    iptables -t nat -A XRAY -p tcp -j REDIRECT --to-ports ${SOCKS_PORT}
+    # Redirect TCP traffic to dokodemo-door port (for transparent proxy)
+    iptables -t nat -A XRAY -p tcp -j REDIRECT --to-ports ${TPROXY_PORT}
 
     # Apply to OUTPUT (for local traffic only, not PREROUTING)
     iptables -t nat -A OUTPUT -j XRAY
@@ -257,13 +257,13 @@ enable_transparent_proxy() {
         # Note: IPv6 bypass rules don't include IPv4 addresses
         ip6tables -t nat -A XRAY -p udp --dport 53 -j RETURN
         ip6tables -t nat -A XRAY -p tcp --dport 53 -j RETURN
-        ip6tables -t nat -A XRAY -p tcp -j REDIRECT --to-ports ${SOCKS_PORT}
+        ip6tables -t nat -A XRAY -p tcp -j REDIRECT --to-ports ${TPROXY_PORT}
         ip6tables -t nat -A OUTPUT -j XRAY
     fi
 
     echo "iptables-enabled" > "${PROXY_STATE_FILE}.tproxy"
     print_success "Transparent proxy enabled with iptables"
-    print_info "Local TCP traffic will be proxied through port ${SOCKS_PORT}"
+    print_info "Local TCP traffic will be proxied through port ${TPROXY_PORT} (dokodemo-door)"
     print_info "Bypassed: proxy server, DNS, local networks"
 }
 
@@ -304,7 +304,7 @@ check_proxy_status() {
     if [[ -f "${PROXY_STATE_FILE}.tproxy" ]]; then
         echo -e "Transparent Proxy: ${GREEN}Enabled${NC}"
         echo "  Mode: iptables REDIRECT"
-        echo "  SOCKS5 Port: ${SOCKS_PORT}"
+        echo "  Dokodemo-door Port: ${TPROXY_PORT}"
         echo "  Active iptables rules:"
         iptables -t nat -L XRAY -n --line-numbers 2>/dev/null | head -n 15
     else
