@@ -178,10 +178,7 @@ xray-manager route-status
 
 ### 完整文档
 
-- [中文使用手册](manager/docs/中文使用手册.md) - 完整详细的使用指南
-- [快速参考](manager/docs/快速参考.md) - 命令速查表
-- [透明代理排除规则](manager/docs/BYPASS-GUIDE.md) - 排除规则配置指南
-- [代理模式说明](manager/docs/PROXY-GUIDE.md) - 系统代理 vs 透明代理
+
 
 ---
 
@@ -255,9 +252,9 @@ sudo xray-manager route-mode bypass-cn
 
 | 特性 | 系统代理 | 透明代理 |
 |------|---------|---------|
-| 对已运行程序生效 | ❌ 否 | ✅ 是 |
-| 需要程序支持 | ✅ 需要 | ❌ 不需要 |
-| 可排除特定应用 | ❌ 难 | ✅ 易 |
+| 对已运行程序生效 |  否 |  是 |
+| 需要程序支持 |  需要 |  不需要 |
+| 可排除特定应用 |  难 |  易 |
 | 配置复杂度 | 低 | 中 |
 | 适用场景 | 桌面环境 | 服务器 |
 
@@ -350,7 +347,7 @@ xray-manager/
 
 ```bash
 # 克隆仓库
-git clone https://github.com/Deepseaon/xray-proxy-manmger.git
+git clone https://github.com/Deepseaon/xray-proxy-manager.git
 cd xray-manager
 
 # 本地测试
