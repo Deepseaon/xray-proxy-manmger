@@ -175,7 +175,13 @@ parse_vless() {
         "port": $port,
         "users": [
           {
-            "id": "$uuid",
+            "id": "$uuid",$(
+            if [[ -n "$flow" ]]; then
+                echo ""
+                echo "            \"email\": \"user@example.com\","
+                echo "            \"security\": \"auto\","
+            fi
+            )
             "encryption": "${encryption:-none}"$(
             if [[ -n "$flow" ]]; then
                 echo ","
