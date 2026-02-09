@@ -213,6 +213,9 @@ enable_transparent_proxy() {
     # Create new chain
     iptables -t nat -N XRAY 2>/dev/null || iptables -t nat -F XRAY
 
+    # Bypass xray's own traffic (marked with 255)
+    iptables -t nat -A XRAY -m mark --mark 255 -j RETURN
+
     # Apply custom bypass rules first
     apply_bypass_rules
 
@@ -238,6 +241,7 @@ enable_transparent_proxy() {
     # IPv6 support (optional)
     if command -v ip6tables &> /dev/null; then
         ip6tables -t nat -N XRAY 2>/dev/null || ip6tables -t nat -F XRAY
+        ip6tables -t nat -A XRAY -m mark --mark 255 -j RETURN
         ip6tables -t nat -A XRAY -p tcp -j REDIRECT --to-ports ${TPROXY_PORT}
         ip6tables -t nat -A PREROUTING -j XRAY
         ip6tables -t nat -A OUTPUT -j XRAY
