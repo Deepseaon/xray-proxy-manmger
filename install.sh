@@ -99,7 +99,7 @@ else
         exit 1
     fi
 
-  # 下载文件
+# 下载文件
     # 定义随机参数（时间戳），强制绕过 GitHub CDN 缓存
     CACHE_BUSTER="?v=$(date +%s)"
 
@@ -116,6 +116,7 @@ else
         fi
         echo "  ✓ 下载完成"
     done
+fi
 
 print_success "文件准备完成"
 echo ""
