@@ -570,6 +570,8 @@ main() {
                 $SCRIPT_DIR/xray-node-manager.sh add "$@"
             else
                 print_error "xray-node-manager.sh not found"
+                print_info "Expected location: $SCRIPT_DIR/xray-node-manager.sh"
+                print_info "Script directory: $SCRIPT_DIR"
                 exit 1
             fi
             ;;
@@ -578,6 +580,8 @@ main() {
                 $SCRIPT_DIR/xray-node-manager.sh list
             else
                 print_error "xray-node-manager.sh not found"
+                print_info "Expected location: $SCRIPT_DIR/xray-node-manager.sh"
+                print_info "Script directory: $SCRIPT_DIR"
                 exit 1
             fi
             ;;
@@ -586,6 +590,7 @@ main() {
                 $SCRIPT_DIR/xray-node-manager.sh select
             else
                 print_error "xray-node-manager.sh not found"
+                print_info "Expected location: $SCRIPT_DIR/xray-node-manager.sh"
                 exit 1
             fi
             ;;
@@ -598,6 +603,7 @@ main() {
                 $SCRIPT_DIR/xray-node-manager.sh switch "$2"
             else
                 print_error "xray-node-manager.sh not found"
+                print_info "Expected location: $SCRIPT_DIR/xray-node-manager.sh"
                 exit 1
             fi
             ;;
@@ -610,6 +616,16 @@ main() {
                 $SCRIPT_DIR/xray-node-manager.sh delete "$2"
             else
                 print_error "xray-node-manager.sh not found"
+                print_info "Expected location: $SCRIPT_DIR/xray-node-manager.sh"
+                exit 1
+            fi
+            ;;
+        node-current)
+            if [[ -f "$SCRIPT_DIR/xray-node-manager.sh" ]]; then
+                $SCRIPT_DIR/xray-node-manager.sh current
+            else
+                print_error "xray-node-manager.sh not found"
+                print_info "Expected location: $SCRIPT_DIR/xray-node-manager.sh"
                 exit 1
             fi
             ;;
@@ -644,8 +660,9 @@ main() {
                 shift
                 $SCRIPT_DIR/xray-routing-mode.sh "$@"
             else
-                print_error "xray-routing-mode.sh not found in current directory"
-                print_info "Make sure xray-routing-mode.sh is in the same directory"
+                print_error "xray-routing-mode.sh not found"
+                print_info "Expected location: $SCRIPT_DIR/xray-routing-mode.sh"
+                print_info "Script directory: $SCRIPT_DIR"
                 exit 1
             fi
             ;;
@@ -654,6 +671,7 @@ main() {
                 $SCRIPT_DIR/xray-routing-mode.sh status
             else
                 print_error "xray-routing-mode.sh not found"
+                print_info "Expected location: $SCRIPT_DIR/xray-routing-mode.sh"
                 exit 1
             fi
             ;;
