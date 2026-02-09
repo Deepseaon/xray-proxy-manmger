@@ -1,6 +1,7 @@
 # Xray Proxy Manager - Linux cli 代理管理工具
 
 <div align="center">
+
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 [![Platform](https://img.shields.io/badge/platform-Linux-green.svg)](https://www.linux.org/)
