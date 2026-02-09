@@ -207,6 +207,15 @@ enable_transparent_proxy() {
     # Load bypass configuration
     load_bypass_config
 
+    # Pre-resolve DNS servers to avoid circular dependency with ECH
+    print_info "Pre-resolving DNS servers for ECH compatibility..."
+    local dns_domains=("dns.alidns.com" "dns.cloudflare.com" "dns.google" "one.one.one.one")
+    for domain in "${dns_domains[@]}"; do
+        if getent hosts "$domain" > /dev/null 2>&1; then
+            print_info "Resolved: $domain"
+        fi
+    done
+
     # Enable IP forwarding
     sysctl -w net.ipv4.ip_forward=1 > /dev/null
     sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
