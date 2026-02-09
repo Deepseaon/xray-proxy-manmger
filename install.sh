@@ -22,7 +22,7 @@ print_error() { echo -e "${RED}[错误]${NC} $1"; }
 echo -e "${CYAN}"
 cat << "EOF"
 ╔═══════════════════════════════════════╗
-║   Xray 管理工具 - 一键安装脚本         ║
+║   Xray 管理工具 - 一键安装脚本        ║
 ║   Version: 2.0.0  by Deepseaon        ║
 ║         silverisky.com                ║
 ╚═══════════════════════════════════════╝
@@ -70,9 +70,9 @@ echo ""
 
 # 检查 curl 或 wget
 if command -v curl &> /dev/null; then
-    DOWNLOAD_CMD="curl -fsSL"
+    DOWNLOAD_CMD="curl -fsSL --connect-timeout 10 --max-time 60"
 elif command -v wget &> /dev/null; then
-    DOWNLOAD_CMD="wget -qO-"
+    DOWNLOAD_CMD="wget -qO- --timeout=60"
 else
     print_error "需要 curl 或 wget 来下载文件"
     print_info "请安装: sudo apt install curl"
@@ -85,9 +85,27 @@ for file in "${REQUIRED_FILES[@]}"; do
 
     FULL_URL="${GITHUB_RAW_URL}/${file}"
 
-    if ! $DOWNLOAD_CMD "$FULL_URL" > "$TEMP_DIR/$file"; then
+    # 尝试下载，最多重试 3 次
+    retry_count=0
+    max_retries=3
+    success=false
+
+    while [ $retry_count -lt $max_retries ]; do
+        if $DOWNLOAD_CMD "$FULL_URL" > "$TEMP_DIR/$file" 2>/dev/null; then
+            success=true
+            break
+        fi
+        retry_count=$((retry_count + 1))
+        if [ $retry_count -lt $max_retries ]; then
+            print_warning "下载失败，重试 $retry_count/$max_retries..."
+            sleep 2
+        fi
+    done
+
+    if [ "$success" = false ]; then
         print_error "下载失败: $file"
         print_info "请求地址: $FULL_URL"
+        print_info "请检查网络连接或稍后重试"
         exit 1
     fi
     echo "  ✓ 下载完成"
