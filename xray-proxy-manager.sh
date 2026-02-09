@@ -254,10 +254,7 @@ enable_transparent_proxy() {
     # IPv6 support (optional)
     if command -v ip6tables &> /dev/null; then
         ip6tables -t nat -N XRAY 2>/dev/null || ip6tables -t nat -F XRAY
-        if [[ -n "$proxy_server" ]] && [[ -n "$proxy_port" ]]; then
-            ip6tables -t nat -A XRAY -d "$proxy_server" -p tcp --dport "$proxy_port" -j RETURN
-            ip6tables -t nat -A XRAY -d "$proxy_server" -p udp --dport "$proxy_port" -j RETURN
-        fi
+        # Note: IPv6 bypass rules don't include IPv4 addresses
         ip6tables -t nat -A XRAY -p udp --dport 53 -j RETURN
         ip6tables -t nat -A XRAY -p tcp --dport 53 -j RETURN
         ip6tables -t nat -A XRAY -p tcp -j REDIRECT --to-ports ${SOCKS_PORT}
