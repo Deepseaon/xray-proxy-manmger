@@ -226,14 +226,14 @@ $(
                 echo "      },"
             fi
             echo "      \"maxEarlyData\": 2048"
-            echo "    },"
+            echo "    }"
             ;;
         xhttp)
             echo "    \"xhttpSettings\": {"
             [[ -n "$path" ]] && echo "      \"path\": \"$path\","
             [[ -n "$host" ]] && echo "      \"host\": \"$host\","
             [[ -n "$mode" ]] && echo "      \"mode\": \"$mode\""
-            echo "    },"
+            echo "    }"
             ;;
     esac
 )  }
