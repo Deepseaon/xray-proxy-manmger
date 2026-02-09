@@ -195,15 +195,7 @@ apply_bypass_rules() {
 
 enable_transparent_proxy() {
     check_root
-    print_info "Enabling transparent proxy with tun2socks..."
-
-    # Check if tun2socks is installed
-    if ! command -v tun2socks &> /dev/null; then
-        print_error "tun2socks is not installed"
-        print_info "Install it with: sudo apt install tun2socks"
-        print_info "Or download from: https://github.com/xjasonlyu/tun2socks/releases"
-        exit 1
-    fi
+    print_info "Enabling transparent proxy with iptables..."
 
     # Check if xray is running
     if ! is_xray_running; then
@@ -212,107 +204,89 @@ enable_transparent_proxy() {
         exit 1
     fi
 
-    # Get default gateway and interface
-    local default_gw=$(ip route | grep default | awk '{print $3}' | head -1)
-    local default_iface=$(ip route | grep default | awk '{print $5}' | head -1)
+    # Load bypass configuration
+    load_bypass_config
 
-    if [[ -z "$default_gw" ]] || [[ -z "$default_iface" ]]; then
-        print_error "Could not detect default gateway"
-        exit 1
-    fi
+    # Enable IP forwarding
+    sysctl -w net.ipv4.ip_forward=1 > /dev/null
+    sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
 
-    print_info "Default gateway: $default_gw via $default_iface"
+    # Create new chain
+    iptables -t nat -N XRAY 2>/dev/null || iptables -t nat -F XRAY
 
-    # Create TUN device (use tun1 to avoid conflicts)
-    print_info "Creating TUN device tun1..."
-    ip tuntap add mode tun dev tun1
-    ip addr add 198.18.0.1/15 dev tun1
-    ip link set dev tun1 up
-
-    # Add route for proxy server (bypass tun1)
+    # Bypass xray's own traffic (by destination port to proxy server)
     local proxy_server=$(grep -oP '"address":\s*"\K[^"]+' "$XRAY_CONFIG_FILE" | head -1)
-    if [[ -n "$proxy_server" ]]; then
-        print_info "Adding route for proxy server: $proxy_server"
-        ip route add "$proxy_server" via "$default_gw" dev "$default_iface" 2>/dev/null || true
+    local proxy_port=$(grep -oP '"port":\s*\K[0-9]+' "$XRAY_CONFIG_FILE" | grep -v "10808\|12345" | head -1)
+    if [[ -n "$proxy_server" ]] && [[ -n "$proxy_port" ]]; then
+        print_info "Bypassing proxy server: $proxy_server:$proxy_port"
+        iptables -t nat -A XRAY -d "$proxy_server" -p tcp --dport "$proxy_port" -j RETURN
+        iptables -t nat -A XRAY -d "$proxy_server" -p udp --dport "$proxy_port" -j RETURN
     fi
 
-    # Add routes for local networks (bypass tun1)
-    ip route add 10.0.0.0/8 via "$default_gw" dev "$default_iface" 2>/dev/null || true
-    ip route add 172.16.0.0/12 via "$default_gw" dev "$default_iface" 2>/dev/null || true
-    ip route add 192.168.0.0/16 via "$default_gw" dev "$default_iface" 2>/dev/null || true
+    # Bypass DNS traffic (port 53 UDP/TCP and 443 for DoH)
+    iptables -t nat -A XRAY -p udp --dport 53 -j RETURN
+    iptables -t nat -A XRAY -p tcp --dport 53 -j RETURN
+    iptables -t nat -A XRAY -p tcp --dport 443 -d 8.8.8.8 -j RETURN
+    iptables -t nat -A XRAY -p tcp --dport 443 -d 8.8.4.4 -j RETURN
+    iptables -t nat -A XRAY -p tcp --dport 443 -d 1.1.1.1 -j RETURN
+    iptables -t nat -A XRAY -p tcp --dport 443 -d 223.5.5.5 -j RETURN
+    iptables -t nat -A XRAY -p tcp --dport 443 -d 223.6.6.6 -j RETURN
 
-    # Set default route through tun1
-    print_info "Setting default route through tun1..."
-    ip route del default 2>/dev/null || true
-    ip route add default via 198.18.0.1 dev tun1 metric 1 2>/dev/null || true
-    ip route add default via "$default_gw" dev "$default_iface" metric 10 2>/dev/null || true
+    # Apply custom bypass rules
+    apply_bypass_rules
 
-    # Start tun2socks in background
-    print_info "Starting tun2socks..."
-    nohup tun2socks -device tun1 -proxy socks5://127.0.0.1:${SOCKS_PORT} > /var/log/tun2socks.log 2>&1 &
-    echo $! > /var/run/tun2socks.pid
+    # Bypass local and reserved addresses
+    iptables -t nat -A XRAY -d 0.0.0.0/8 -j RETURN
+    iptables -t nat -A XRAY -d 10.0.0.0/8 -j RETURN
+    iptables -t nat -A XRAY -d 127.0.0.0/8 -j RETURN
+    iptables -t nat -A XRAY -d 169.254.0.0/16 -j RETURN
+    iptables -t nat -A XRAY -d 172.16.0.0/12 -j RETURN
+    iptables -t nat -A XRAY -d 192.168.0.0/16 -j RETURN
+    iptables -t nat -A XRAY -d 224.0.0.0/4 -j RETURN
+    iptables -t nat -A XRAY -d 240.0.0.0/4 -j RETURN
 
-    sleep 2
+    # Redirect TCP traffic to SOCKS5 port (using REDIRECT for local traffic)
+    iptables -t nat -A XRAY -p tcp -j REDIRECT --to-ports ${SOCKS_PORT}
 
-    # Check if tun2socks is running
-    if ! pgrep -f tun2socks > /dev/null; then
-        print_error "Failed to start tun2socks"
-        print_info "Check logs: cat /var/log/tun2socks.log"
-        # Cleanup
-        ip link set dev tun1 down 2>/dev/null || true
-        ip tuntap del mode tun dev tun1 2>/dev/null || true
-        exit 1
+    # Apply to OUTPUT (for local traffic only, not PREROUTING)
+    iptables -t nat -A OUTPUT -j XRAY
+
+    # IPv6 support (optional)
+    if command -v ip6tables &> /dev/null; then
+        ip6tables -t nat -N XRAY 2>/dev/null || ip6tables -t nat -F XRAY
+        if [[ -n "$proxy_server" ]] && [[ -n "$proxy_port" ]]; then
+            ip6tables -t nat -A XRAY -d "$proxy_server" -p tcp --dport "$proxy_port" -j RETURN
+            ip6tables -t nat -A XRAY -d "$proxy_server" -p udp --dport "$proxy_port" -j RETURN
+        fi
+        ip6tables -t nat -A XRAY -p udp --dport 53 -j RETURN
+        ip6tables -t nat -A XRAY -p tcp --dport 53 -j RETURN
+        ip6tables -t nat -A XRAY -p tcp -j REDIRECT --to-ports ${SOCKS_PORT}
+        ip6tables -t nat -A OUTPUT -j XRAY
     fi
 
-    # Save state
-    echo "tun2socks-enabled" > "${PROXY_STATE_FILE}.tproxy"
-    echo "$default_gw" > "${PROXY_STATE_FILE}.tproxy.gw"
-    echo "$default_iface" > "${PROXY_STATE_FILE}.tproxy.iface"
-
-    print_success "Transparent proxy enabled with tun2socks"
-    print_info "All traffic will be proxied through SOCKS5 ${SOCKS_PORT}"
-    print_info "TUN device: tun1 (198.18.0.1/15)"
+    echo "iptables-enabled" > "${PROXY_STATE_FILE}.tproxy"
+    print_success "Transparent proxy enabled with iptables"
+    print_info "Local TCP traffic will be proxied through port ${SOCKS_PORT}"
+    print_info "Bypassed: proxy server, DNS, local networks"
 }
 
 disable_transparent_proxy() {
     check_root
     print_info "Disabling transparent proxy..."
 
-    # Stop tun2socks
-    if [[ -f /var/run/tun2socks.pid ]]; then
-        local pid=$(cat /var/run/tun2socks.pid)
-        if kill -0 "$pid" 2>/dev/null; then
-            print_info "Stopping tun2socks (PID: $pid)..."
-            kill "$pid" 2>/dev/null || true
-            sleep 1
-            kill -9 "$pid" 2>/dev/null || true
-        fi
-        rm -f /var/run/tun2socks.pid
+    # Remove iptables rules
+    iptables -t nat -D OUTPUT -j XRAY 2>/dev/null || true
+    iptables -t nat -F XRAY 2>/dev/null || true
+    iptables -t nat -X XRAY 2>/dev/null || true
+
+    # Remove IPv6 rules
+    if command -v ip6tables &> /dev/null; then
+        ip6tables -t nat -D OUTPUT -j XRAY 2>/dev/null || true
+        ip6tables -t nat -F XRAY 2>/dev/null || true
+        ip6tables -t nat -X XRAY 2>/dev/null || true
     fi
 
-    # Also kill by name in case PID file is missing
-    pkill -f tun2socks 2>/dev/null || true
-
-    # Restore default route
-    if [[ -f "${PROXY_STATE_FILE}.tproxy.gw" ]] && [[ -f "${PROXY_STATE_FILE}.tproxy.iface" ]]; then
-        local default_gw=$(cat "${PROXY_STATE_FILE}.tproxy.gw")
-        local default_iface=$(cat "${PROXY_STATE_FILE}.tproxy.iface")
-
-        print_info "Restoring default route..."
-        ip route del default 2>/dev/null || true
-        ip route add default via "$default_gw" dev "$default_iface" 2>/dev/null || true
-    fi
-
-    # Remove TUN device
-    print_info "Removing TUN device..."
-    ip link set dev tun1 down 2>/dev/null || true
-    ip tuntap del mode tun dev tun1 2>/dev/null || true
-
-    # Clean up state files
     rm -f "${PROXY_STATE_FILE}.tproxy"
-    rm -f "${PROXY_STATE_FILE}.tproxy.gw"
-    rm -f "${PROXY_STATE_FILE}.tproxy.iface"
-
     print_success "Transparent proxy disabled"
 }
 
@@ -332,17 +306,10 @@ check_proxy_status() {
     # Transparent proxy
     if [[ -f "${PROXY_STATE_FILE}.tproxy" ]]; then
         echo -e "Transparent Proxy: ${GREEN}Enabled${NC}"
-        echo "  Mode: tun2socks"
-        echo "  TUN device: tun1"
-        if [[ -f /var/run/tun2socks.pid ]]; then
-            local pid=$(cat /var/run/tun2socks.pid)
-            if kill -0 "$pid" 2>/dev/null; then
-                echo "  tun2socks PID: $pid (running)"
-            else
-                echo "  tun2socks PID: $pid (not running)"
-            fi
-        fi
-        ip addr show tun1 2>/dev/null | grep "inet " || echo "  TUN device not found"
+        echo "  Mode: iptables REDIRECT"
+        echo "  SOCKS5 Port: ${SOCKS_PORT}"
+        echo "  Active iptables rules:"
+        iptables -t nat -L XRAY -n --line-numbers 2>/dev/null | head -n 15
     else
         echo -e "Transparent Proxy: ${RED}Disabled${NC}"
     fi
