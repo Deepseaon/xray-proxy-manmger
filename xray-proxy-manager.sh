@@ -204,6 +204,11 @@ enable_transparent_proxy() {
         exit 1
     fi
 
+    # Force xray to fetch ECH configuration before enabling transparent proxy
+    if curl -s --socks5 127.0.0.1:${SOCKS_PORT} --max-time 10 --connect-timeout 5 https://www.google.com > /dev/null 2>&1; then
+        sleep 1  # Give xray a moment to cache the ECH config
+    fi
+
     # Load bypass configuration
     load_bypass_config
 
@@ -215,30 +220,31 @@ enable_transparent_proxy() {
     iptables -t nat -N XRAY 2>/dev/null || iptables -t nat -F XRAY
 
     # Pre-resolve and bypass DNS servers for ECH compatibility
-    print_info "Pre-resolving and bypassing DNS servers for ECH compatibility..."
     local dns_domains=("dns.alidns.com" "dns.cloudflare.com" "dns.google" "one.one.one.one")
+    local bypass_count=0
     for domain in "${dns_domains[@]}"; do
         # Resolve domain and extract IPs
         local ips=$(getent hosts "$domain" 2>/dev/null | awk '{print $1}' | sort -u)
         if [[ -n "$ips" ]]; then
-            print_info "Resolved $domain:"
             while IFS= read -r ip; do
                 # Add bypass rule for each resolved IP on port 443 (DoH)
                 if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
                     # IPv4
                     iptables -t nat -A XRAY -d "$ip" -p tcp --dport 443 -j RETURN
                     iptables -t nat -A XRAY -d "$ip" -p udp --dport 443 -j RETURN
-                    print_info "  - Bypassing IPv4: $ip"
+                    ((bypass_count++))
                 elif [[ "$ip" =~ : ]]; then
                     # IPv6
                     if command -v ip6tables &> /dev/null; then
                         ip6tables -t nat -A XRAY -d "$ip" -p tcp --dport 443 -j RETURN 2>/dev/null || true
                         ip6tables -t nat -A XRAY -d "$ip" -p udp --dport 443 -j RETURN 2>/dev/null || true
-                        print_info "  - Bypassing IPv6: $ip"
+                        ((bypass_count++))
                     fi
                 fi
             done <<< "$ips"
         fi
+    done
+    [[ $bypass_count -gt 0 ]] && print_info "Bypassed $bypass_count DNS server IP(s) for ECH"
     done
 
     # Bypass xray's own traffic (by destination port to proxy server)
