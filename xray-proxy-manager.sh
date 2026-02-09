@@ -245,7 +245,6 @@ enable_transparent_proxy() {
         fi
     done
     [[ $bypass_count -gt 0 ]] && print_info "Bypassed $bypass_count DNS server IP(s) for ECH"
-    done
 
     # Bypass xray's own traffic (by destination port to proxy server)
     local proxy_server=$(grep -oP '"address":\s*"\K[^"]+' "$XRAY_CONFIG_FILE" | head -1)
