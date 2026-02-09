@@ -227,6 +227,9 @@ enable_transparent_proxy() {
     # Apply to PREROUTING
     iptables -t mangle -A PREROUTING -j XRAY
 
+    # Apply to OUTPUT for local traffic
+    iptables -t mangle -A OUTPUT -j XRAY
+
     # Setup routing
     ip rule add fwmark ${TPROXY_MARK} table 100 2>/dev/null || true
     ip route add local 0.0.0.0/0 dev lo table 100 2>/dev/null || true
@@ -252,6 +255,7 @@ disable_transparent_proxy() {
 
     # Remove iptables rules
     iptables -t mangle -D PREROUTING -j XRAY 2>/dev/null || true
+    iptables -t mangle -D OUTPUT -j XRAY 2>/dev/null || true
     iptables -t mangle -F XRAY 2>/dev/null || true
     iptables -t mangle -X XRAY 2>/dev/null || true
 
