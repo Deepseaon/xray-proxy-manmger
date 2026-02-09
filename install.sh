@@ -99,17 +99,23 @@ else
         exit 1
     fi
 
-    # 下载文件
+  # 下载文件
+    # 定义随机参数（时间戳），强制绕过 GitHub CDN 缓存
+    CACHE_BUSTER="?v=$(date +%s)"
+
     for file in "${REQUIRED_FILES[@]}"; do
         print_info "下载: $file"
-        if ! $DOWNLOAD_CMD "${GITHUB_RAW_URL}/${file}" > "$TEMP_DIR/$file"; then
+        
+        # 拼接 URL 时加入缓存刷新参数
+        FULL_URL="${GITHUB_RAW_URL}/${file}${CACHE_BUSTER}"
+        
+        if ! $DOWNLOAD_CMD "$FULL_URL" > "$TEMP_DIR/$file"; then
             print_error "下载失败: $file"
-            print_info "请检查网络连接或仓库地址"
+            print_info "报错请求地址: $FULL_URL"
             exit 1
         fi
         echo "  ✓ 下载完成"
     done
-fi
 
 print_success "文件准备完成"
 echo ""
