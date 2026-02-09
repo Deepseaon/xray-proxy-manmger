@@ -223,33 +223,33 @@ enable_transparent_proxy() {
 
     print_info "Default gateway: $default_gw via $default_iface"
 
-    # Create TUN device
-    print_info "Creating TUN device..."
-    ip tuntap add mode tun dev tun0
-    ip addr add 198.18.0.1/15 dev tun0
-    ip link set dev tun0 up
+    # Create TUN device (use tun1 to avoid conflicts)
+    print_info "Creating TUN device tun1..."
+    ip tuntap add mode tun dev tun1
+    ip addr add 198.18.0.1/15 dev tun1
+    ip link set dev tun1 up
 
-    # Add route for proxy server (bypass tun0)
+    # Add route for proxy server (bypass tun1)
     local proxy_server=$(grep -oP '"address":\s*"\K[^"]+' "$XRAY_CONFIG_FILE" | head -1)
     if [[ -n "$proxy_server" ]]; then
         print_info "Adding route for proxy server: $proxy_server"
         ip route add "$proxy_server" via "$default_gw" dev "$default_iface" 2>/dev/null || true
     fi
 
-    # Add routes for local networks (bypass tun0)
+    # Add routes for local networks (bypass tun1)
     ip route add 10.0.0.0/8 via "$default_gw" dev "$default_iface" 2>/dev/null || true
     ip route add 172.16.0.0/12 via "$default_gw" dev "$default_iface" 2>/dev/null || true
     ip route add 192.168.0.0/16 via "$default_gw" dev "$default_iface" 2>/dev/null || true
 
-    # Set default route through tun0
-    print_info "Setting default route through tun0..."
+    # Set default route through tun1
+    print_info "Setting default route through tun1..."
     ip route del default 2>/dev/null || true
-    ip route add default via 198.18.0.1 dev tun0 metric 1
+    ip route add default via 198.18.0.1 dev tun1 metric 1
     ip route add default via "$default_gw" dev "$default_iface" metric 10
 
     # Start tun2socks in background
     print_info "Starting tun2socks..."
-    nohup tun2socks -device tun0 -proxy socks5://127.0.0.1:${SOCKS_PORT} > /var/log/tun2socks.log 2>&1 &
+    nohup tun2socks -device tun1 -proxy socks5://127.0.0.1:${SOCKS_PORT} > /var/log/tun2socks.log 2>&1 &
     echo $! > /var/run/tun2socks.pid
 
     sleep 2
@@ -259,8 +259,8 @@ enable_transparent_proxy() {
         print_error "Failed to start tun2socks"
         print_info "Check logs: cat /var/log/tun2socks.log"
         # Cleanup
-        ip link set dev tun0 down 2>/dev/null || true
-        ip tuntap del mode tun dev tun0 2>/dev/null || true
+        ip link set dev tun1 down 2>/dev/null || true
+        ip tuntap del mode tun dev tun1 2>/dev/null || true
         exit 1
     fi
 
@@ -271,7 +271,7 @@ enable_transparent_proxy() {
 
     print_success "Transparent proxy enabled with tun2socks"
     print_info "All traffic will be proxied through SOCKS5 ${SOCKS_PORT}"
-    print_info "TUN device: tun0 (198.18.0.1/15)"
+    print_info "TUN device: tun1 (198.18.0.1/15)"
 }
 
 disable_transparent_proxy() {
@@ -305,8 +305,8 @@ disable_transparent_proxy() {
 
     # Remove TUN device
     print_info "Removing TUN device..."
-    ip link set dev tun0 down 2>/dev/null || true
-    ip tuntap del mode tun dev tun0 2>/dev/null || true
+    ip link set dev tun1 down 2>/dev/null || true
+    ip tuntap del mode tun dev tun1 2>/dev/null || true
 
     # Clean up state files
     rm -f "${PROXY_STATE_FILE}.tproxy"
@@ -333,7 +333,7 @@ check_proxy_status() {
     if [[ -f "${PROXY_STATE_FILE}.tproxy" ]]; then
         echo -e "Transparent Proxy: ${GREEN}Enabled${NC}"
         echo "  Mode: tun2socks"
-        echo "  TUN device: tun0"
+        echo "  TUN device: tun1"
         if [[ -f /var/run/tun2socks.pid ]]; then
             local pid=$(cat /var/run/tun2socks.pid)
             if kill -0 "$pid" 2>/dev/null; then
@@ -342,7 +342,7 @@ check_proxy_status() {
                 echo "  tun2socks PID: $pid (not running)"
             fi
         fi
-        ip addr show tun0 2>/dev/null | grep "inet " || echo "  TUN device not found"
+        ip addr show tun1 2>/dev/null | grep "inet " || echo "  TUN device not found"
     else
         echo -e "Transparent Proxy: ${RED}Disabled${NC}"
     fi
