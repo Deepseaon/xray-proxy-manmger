@@ -31,7 +31,7 @@ XRAY_LOG_DIR="/var/log/xray"
 # Proxy settings
 PROXY_STATE_FILE="/tmp/xray-proxy-state"
 SOCKS_PORT="10808"
-HTTP_PORT="10809"
+HTTP_PORT="10808"  # Mixed protocol handles both HTTP and SOCKS on same port
 TPROXY_PORT="12345"
 TPROXY_MARK="1"
 BYPASS_CONFIG="${XRAY_CONFIG_DIR}/tproxy-bypass.conf"
