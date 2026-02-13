@@ -154,6 +154,9 @@ xray-manager test
 
 # 配置 xray 用户（防止透明代理流量循环）
 sudo xray-manager setup-user
+
+# 添加服务到 bypass 组（排除透明代理）
+sudo xray-manager bypass-add <service-name>
 ```
 
 #### 代理模式
@@ -216,7 +219,11 @@ sudo xray-manager start
 # 4. 设置绕过大陆路由
 sudo xray-manager route-mode bypass-cn
 
-# 5. 配置排除规则（可选）
+# 5. 排除特定服务（可选）
+# 例如：让 qBittorrent 不走代理
+sudo xray-manager bypass-add qbittorrent-nox
+
+# 6. 或编辑配置文件自定义规则
 sudo vi /opt/xray-manager/tproxy-bypass.conf
 ```
 
