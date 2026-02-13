@@ -24,7 +24,8 @@
 - **一键生成配置** - 从 vless/vmess 分享链接直接生成完整配置
 -  **多节点管理** - 保存多个节点，随时切换，启动时可选择
 -  **系统代理** - 设置环境变量，支持 GNOME/KDE 桌面
--  **透明代理** - 基于 iptables 的全局透明代理
+-  **透明代理** - 基于 iptables 的全局透明代理，支持 IPv4/IPv6 单双栈
+-  **防流量循环** - 自动排除 xray 自身流量，防止死循环
 -  **排除规则** - 灵活的透明代理排除规则（按用户、IP、端口等）
 -  **路由模式切换** - 绕过大陆/全局代理/直连三种模式
 -  **服务管理** - 启动/停止/重启/状态查看
@@ -150,6 +151,9 @@ xray-manager logs
 
 # 测试连接
 xray-manager test
+
+# 配置 xray 用户（防止透明代理流量循环）
+sudo xray-manager setup-user
 ```
 
 #### 代理模式
@@ -161,7 +165,7 @@ sudo xray-manager proxy-on
 # 禁用系统代理
 sudo xray-manager proxy-off
 
-# 启用透明代理
+# 启用透明代理（支持选择 IPv4 单栈或双栈）
 sudo xray-manager tproxy-on
 
 # 禁用透明代理
@@ -201,15 +205,19 @@ xray-manager route-status
 # 1. 添加节点
 xray-manager node-add "vless://..." "主节点"
 
-# 2. 启动并选择透明代理
+# 2. 配置 xray 用户（推荐，防止流量循环）
+sudo xray-manager setup-user
+
+# 3. 启动并选择透明代理
 sudo xray-manager start
 # 选择：透明代理模式
+# 选择：IPv4 单栈或双栈
 
-# 3. 设置绕过大陆路由
+# 4. 设置绕过大陆路由
 sudo xray-manager route-mode bypass-cn
 
-# 4. 配置排除规则（可选）
-sudo vi /usr/local/etc/xray/tproxy-bypass.conf
+# 5. 配置排除规则（可选）
+sudo vi /opt/xray-manager/tproxy-bypass.conf
 ```
 
 ### 场景二：管理多个节点
@@ -290,7 +298,7 @@ xray-manager node-add "vless://uuid@server:443?..." "节点名"
 
 编辑排除规则配置：
 ```bash
-sudo vi /usr/local/etc/xray/tproxy-bypass.conf
+sudo vi /opt/xray-manager/tproxy-bypass.conf
 ```
 
 详见：[透明代理排除规则](manager/docs/BYPASS-GUIDE.md)
@@ -298,7 +306,7 @@ sudo vi /usr/local/etc/xray/tproxy-bypass.conf
 ### Q4: 如何更新工具？
 
 ```bash
-# 重新运行安装脚本即可
+# 重新运行安装脚本即可（不会覆盖用户配置）
 curl -fsSL https://raw.githubusercontent.com/Deepseaon/xray-proxy-manager/main/install.sh | sudo bash
 ```
 
@@ -328,7 +336,7 @@ xray-manager/
 │   ├── xray-config-generator.sh      # 配置生成器
 │   ├── xray-node-manager.sh          # 节点管理器
 │   ├── xray-routing-mode.sh          # 路由模式切换
-│   ├── tproxy-bypass.conf            # 透明代理排除规则配置
+│   ├── tproxy-bypass.conf.sample     # 透明代理排除规则配置模板
 │   └── docs/                         # 文档目录
 │       ├── 中文使用手册.md
 │       ├── 快速参考.md
