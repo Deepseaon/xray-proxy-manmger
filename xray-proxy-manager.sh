@@ -252,6 +252,13 @@ enable_transparent_proxy() {
         print_info "Bypassing xray user traffic (UID: $xray_uid)"
     fi
 
+    # Bypass services in bypass group
+    local bypass_gid=$(getent group bypass 2>/dev/null | cut -d: -f3)
+    if [[ -n "$bypass_gid" ]]; then
+        iptables -t nat -A XRAY -m owner --gid-owner "$bypass_gid" -j RETURN
+        print_info "Bypassing bypass group traffic (GID: $bypass_gid)"
+    fi
+
     # Bypass proxy server connection
     local proxy_server=$(grep -oP '"address":\s*"\K[^"]+' "$XRAY_CONFIG_FILE" | head -1)
     local proxy_port=$(grep -oP '"port":\s*\K[0-9]+' "$XRAY_CONFIG_FILE" | grep -v "10808\|12345" | head -1)
@@ -289,6 +296,11 @@ enable_transparent_proxy() {
             ip6tables -t nat -A XRAY -m owner --uid-owner "$xray_uid" -j RETURN
         fi
 
+        # Bypass services in bypass group
+        if [[ -n "$bypass_gid" ]]; then
+            ip6tables -t nat -A XRAY -m owner --gid-owner "$bypass_gid" -j RETURN
+        fi
+
         # Bypass local and private networks
         ip6tables -t nat -A XRAY -d ::1/128 -j RETURN
         ip6tables -t nat -A XRAY -d fc00::/7 -j RETURN
@@ -304,7 +316,7 @@ enable_transparent_proxy() {
     echo "iptables-enabled" > "${PROXY_STATE_FILE}.tproxy"
     print_success "Transparent proxy enabled with iptables"
     print_info "Local TCP traffic will be proxied through port ${TPROXY_PORT}"
-    print_info "Bypassed: xray user, proxy server, local networks"
+    print_info "Bypassed: xray user, bypass group, proxy server, local networks"
 }
 
 disable_transparent_proxy() {
@@ -547,13 +559,14 @@ setup_xray_user() {
 
     # Find xray service file
     local service_file=""
-    if [[ -f "/etc/systemd/system/xray.service" ]]; then
-        service_file="/etc/systemd/system/xray.service"
-    elif [[ -f "/usr/lib/systemd/system/xray.service" ]]; then
-        service_file="/usr/lib/systemd/system/xray.service"
-    elif [[ -f "/lib/systemd/system/xray.service" ]]; then
-        service_file="/lib/systemd/system/xray.service"
-    else
+    for path in "/etc/systemd/system" "/usr/lib/systemd/system" "/lib/systemd/system"; do
+        if [[ -f "$path/xray.service" ]]; then
+            service_file="$path/xray.service"
+            break
+        fi
+    done
+
+    if [[ -z "$service_file" ]]; then
         print_error "Xray service file not found"
         print_info "Please install xray first or manually create the service file"
         exit 1
@@ -569,13 +582,16 @@ setup_xray_user() {
         else
             print_warning "Service currently runs as: $current_user"
             read -p "Change to xray user? [y/N]: " confirm
-            [[ "$confirm" != "y" ]] && [[ "$confirm" != "Y" ]] && exit 0
-            sed -i 's/^User=.*/User=xray/' "$service_file"
-            print_success "Updated User to xray"
+            if [[ "$confirm" == "y" ]] || [[ "$confirm" == "Y" ]]; then
+                sed -i "s/^User=.*/User=xray/" "$service_file"
+                sed -i "s/^Group=.*/Group=xray/" "$service_file" 2>/dev/null || true
+                print_success "Updated User to xray"
+            else
+                exit 0
+            fi
         fi
     else
-        # Add User= and Group= after [Service]
-        sed -i '/^\[Service\]/a User=xray\nGroup=xray' "$service_file"
+        sed -i "/^\[Service\]/a User=xray\nGroup=xray" "$service_file"
         print_success "Added User=xray and Group=xray to service file"
     fi
 
@@ -596,6 +612,75 @@ setup_xray_user() {
         print_error "Failed to restart xray service"
         print_info "Check logs: journalctl -u xray -n 50"
         exit 1
+    fi
+}
+
+# Add service to bypass group
+bypass_add_service() {
+    check_root
+    local service_name="$1"
+
+    if [[ -z "$service_name" ]]; then
+        print_error "Service name required"
+        print_info "Usage: xray-manager bypass-add <service-name>"
+        exit 1
+    fi
+
+    print_info "Adding service '$service_name' to bypass group..."
+
+    # Create bypass group if not exists
+    if ! getent group bypass &>/dev/null; then
+        print_info "Creating bypass group..."
+        groupadd -r bypass
+        print_success "Group 'bypass' created"
+    else
+        print_info "Group 'bypass' already exists"
+    fi
+
+    local bypass_gid=$(getent group bypass | cut -d: -f3)
+    print_info "Bypass group GID: $bypass_gid"
+
+    # Find service file
+    local service_file=""
+    for path in "/etc/systemd/system" "/usr/lib/systemd/system" "/lib/systemd/system"; do
+        if [[ -f "$path/${service_name}.service" ]]; then
+            service_file="$path/${service_name}.service"
+            break
+        fi
+    done
+
+    if [[ -z "$service_file" ]]; then
+        print_error "Service file ${service_name}.service not found"
+        print_info "Searched in: /etc/systemd/system, /usr/lib/systemd/system, /lib/systemd/system"
+        exit 1
+    fi
+
+    print_info "Found service file: $service_file"
+
+    # Check if SupplementaryGroups= already set
+    if grep -q "^SupplementaryGroups=" "$service_file"; then
+        local current_groups=$(grep "^SupplementaryGroups=" "$service_file" | cut -d= -f2)
+        if echo "$current_groups" | grep -q "bypass"; then
+            print_info "Service already has bypass group"
+        else
+            sed -i "s/^SupplementaryGroups=.*/SupplementaryGroups=$current_groups bypass/" "$service_file"
+            print_success "Added bypass to SupplementaryGroups"
+        fi
+    else
+        sed -i "/^\[Service\]/a SupplementaryGroups=bypass" "$service_file"
+        print_success "Added SupplementaryGroups=bypass to service file"
+    fi
+
+    # Reload and restart service
+    print_info "Reloading systemd and restarting $service_name..."
+    systemctl daemon-reload
+
+    if systemctl restart "$service_name" 2>/dev/null; then
+        print_success "Service $service_name restarted successfully"
+        print_info "This service will now bypass transparent proxy"
+    else
+        print_warning "Failed to restart $service_name, please check manually"
+        print_info "Check logs: journalctl -u $service_name -n 50"
     fi
 }
 
@@ -636,6 +721,8 @@ ${YELLOW}Configuration:${NC}
     config          Edit configuration file
     reload          Reload configuration without stopping
     setup-user      Setup xray user for transparent proxy (prevent traffic loop)
+    bypass-add <service>
+                    Add service to bypass group (exclude from transparent proxy)
 
 ${YELLOW}Utilities:${NC}
     test            Test proxy connection
@@ -819,6 +906,14 @@ main() {
             ;;
         setup-user)
             setup_xray_user
+            ;;
+        bypass-add)
+            if [[ -z "$2" ]]; then
+                print_error "Service name required"
+                print_info "Usage: xray-manager bypass-add <service-name>"
+                exit 1
+            fi
+            bypass_add_service "$2"
             ;;
         reload)
             check_root
