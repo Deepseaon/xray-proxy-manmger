@@ -34,7 +34,7 @@ SOCKS_PORT="10808"
 HTTP_PORT="10808"  # Mixed protocol handles both HTTP and SOCKS on same port
 TPROXY_PORT="12345"
 TPROXY_MARK="1"
-BYPASS_CONFIG="${XRAY_CONFIG_DIR}/tproxy-bypass.conf"
+BYPASS_CONFIG="${SCRIPT_DIR}/tproxy-bypass.conf"
 
 # Helper functions
 print_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -145,51 +145,60 @@ load_bypass_config() {
 # Apply bypass rules to iptables
 apply_bypass_rules() {
     local rule_count=0
+    local ip_version="$1"  # "ipv4" or "ipv6"
 
-    # Bypass by user
-    for user in "${BYPASS_USERS[@]}"; do
-        if id "$user" &>/dev/null; then
-            local uid=$(id -u "$user")
-            iptables -t nat -A XRAY -m owner --uid-owner "$uid" -j RETURN
-            print_info "Bypass rule added for user: $user (UID: $uid)"
+    if [[ "$ip_version" == "ipv4" ]]; then
+        local ipt_cmd="iptables"
+    else
+        local ipt_cmd="ip6tables"
+    fi
+
+    # Bypass by user (IPv4 only)
+    if [[ "$ip_version" == "ipv4" ]]; then
+        for user in "${BYPASS_USERS[@]}"; do
+            if id "$user" &>/dev/null; then
+                local uid=$(id -u "$user")
+                $ipt_cmd -t nat -A XRAY -m owner --uid-owner "$uid" -j RETURN
+                print_info "Bypass rule added for user: $user (UID: $uid)"
+                ((rule_count++))
+            else
+                print_warning "User not found: $user"
+            fi
+        done
+
+        # Bypass by UID
+        for uid in "${BYPASS_UIDS[@]}"; do
+            $ipt_cmd -t nat -A XRAY -m owner --uid-owner "$uid" -j RETURN
+            print_info "Bypass rule added for UID: $uid"
             ((rule_count++))
-        else
-            print_warning "User not found: $user"
-        fi
-    done
+        done
 
-    # Bypass by UID
-    for uid in "${BYPASS_UIDS[@]}"; do
-        iptables -t nat -A XRAY -m owner --uid-owner "$uid" -j RETURN
-        print_info "Bypass rule added for UID: $uid"
-        ((rule_count++))
-    done
+        # Bypass by destination IP
+        for ip in "${BYPASS_IPS[@]}"; do
+            $ipt_cmd -t nat -A XRAY -d "$ip" -j RETURN
+            print_info "Bypass rule added for IP: $ip"
+            ((rule_count++))
+        done
 
-    # Bypass by destination IP
-    for ip in "${BYPASS_IPS[@]}"; do
-        iptables -t nat -A XRAY -d "$ip" -j RETURN
-        print_info "Bypass rule added for IP: $ip"
-        ((rule_count++))
-    done
+        # Bypass by destination port
+        for port in "${BYPASS_PORTS[@]}"; do
+            $ipt_cmd -t nat -A XRAY -p tcp --dport "$port" -j RETURN
+            $ipt_cmd -t nat -A XRAY -p udp --dport "$port" -j RETURN
+            print_info "Bypass rule added for port: $port"
+            ((rule_count++))
+        done
 
-    # Bypass by destination port
-    for port in "${BYPASS_PORTS[@]}"; do
-        iptables -t nat -A XRAY -p tcp --dport "$port" -j RETURN
-        iptables -t nat -A XRAY -p udp --dport "$port" -j RETURN
-        print_info "Bypass rule added for port: $port"
-        ((rule_count++))
-    done
-
-    # Bypass by source port
-    for port in "${BYPASS_SOURCE_PORTS[@]}"; do
-        iptables -t nat -A XRAY -p tcp --sport "$port" -j RETURN
-        iptables -t nat -A XRAY -p udp --sport "$port" -j RETURN
-        print_info "Bypass rule added for source port: $port"
-        ((rule_count++))
-    done
+        # Bypass by source port
+        for port in "${BYPASS_SOURCE_PORTS[@]}"; do
+            $ipt_cmd -t nat -A XRAY -p tcp --sport "$port" -j RETURN
+            $ipt_cmd -t nat -A XRAY -p udp --sport "$port" -j RETURN
+            print_info "Bypass rule added for source port: $port"
+            ((rule_count++))
+        done
+    fi
 
     if [[ $rule_count -gt 0 ]]; then
-        print_success "Applied $rule_count bypass rule(s)"
+        print_success "Applied $rule_count bypass rule(s) for $ip_version"
     fi
 }
 
@@ -204,38 +213,42 @@ enable_transparent_proxy() {
         exit 1
     fi
 
+    # Ask for IP stack mode
+    echo ""
+    echo "Select IP stack mode:"
+    echo "  1) IPv4 only (单栈 IPv4)"
+    echo "  2) Dual stack (双栈 IPv4 + IPv6)"
+    read -p "Enter choice [1-2]: " stack_choice
+
     # Load bypass configuration
     load_bypass_config
 
     # Enable IP forwarding
     sysctl -w net.ipv4.ip_forward=1 > /dev/null
-    sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+    if [[ "$stack_choice" == "2" ]]; then
+        sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+    fi
 
     # Create new chain
     iptables -t nat -N XRAY 2>/dev/null || iptables -t nat -F XRAY
 
-    # Bypass xray's own traffic (by destination port to proxy server)
+    # Bypass xray's own traffic (prevent loop)
+    local xray_uid=$(id -u xray 2>/dev/null || echo "0")
+    if [[ "$xray_uid" != "0" ]]; then
+        iptables -t nat -A XRAY -m owner --uid-owner "$xray_uid" -j RETURN
+        print_info "Bypassing xray user traffic (UID: $xray_uid)"
+    fi
+
+    # Bypass proxy server connection
     local proxy_server=$(grep -oP '"address":\s*"\K[^"]+' "$XRAY_CONFIG_FILE" | head -1)
     local proxy_port=$(grep -oP '"port":\s*\K[0-9]+' "$XRAY_CONFIG_FILE" | grep -v "10808\|12345" | head -1)
     if [[ -n "$proxy_server" ]] && [[ -n "$proxy_port" ]]; then
-        print_info "Bypassing proxy server: $proxy_server:$proxy_port"
         iptables -t nat -A XRAY -d "$proxy_server" -p tcp --dport "$proxy_port" -j RETURN
         iptables -t nat -A XRAY -d "$proxy_server" -p udp --dport "$proxy_port" -j RETURN
+        print_info "Bypassing proxy server: $proxy_server:$proxy_port"
     fi
 
-    # Bypass DNS traffic (port 53 UDP/TCP and 443 for DoH)
-    iptables -t nat -A XRAY -p udp --dport 53 -j RETURN
-    iptables -t nat -A XRAY -p tcp --dport 53 -j RETURN
-    iptables -t nat -A XRAY -p tcp --dport 443 -d 8.8.8.8 -j RETURN
-    iptables -t nat -A XRAY -p tcp --dport 443 -d 8.8.4.4 -j RETURN
-    iptables -t nat -A XRAY -p tcp --dport 443 -d 1.1.1.1 -j RETURN
-    iptables -t nat -A XRAY -p tcp --dport 443 -d 223.5.5.5 -j RETURN
-    iptables -t nat -A XRAY -p tcp --dport 443 -d 223.6.6.6 -j RETURN
-
-    # Apply custom bypass rules
-    apply_bypass_rules
-
-    # Bypass local and reserved addresses
+    # Bypass local and private networks
     iptables -t nat -A XRAY -d 0.0.0.0/8 -j RETURN
     iptables -t nat -A XRAY -d 10.0.0.0/8 -j RETURN
     iptables -t nat -A XRAY -d 127.0.0.0/8 -j RETURN
@@ -245,26 +258,40 @@ enable_transparent_proxy() {
     iptables -t nat -A XRAY -d 224.0.0.0/4 -j RETURN
     iptables -t nat -A XRAY -d 240.0.0.0/4 -j RETURN
 
-    # Redirect TCP traffic to dokodemo-door port (for transparent proxy)
+    # Apply custom bypass rules
+    apply_bypass_rules "ipv4"
+
+    # Redirect TCP traffic to dokodemo-door port
     iptables -t nat -A XRAY -p tcp -j REDIRECT --to-ports ${TPROXY_PORT}
 
-    # Apply to OUTPUT (for local traffic only, not PREROUTING)
+    # Apply to OUTPUT (for local traffic only)
     iptables -t nat -A OUTPUT -j XRAY
 
-    # IPv6 support (optional)
-    if command -v ip6tables &> /dev/null; then
+    # IPv6 support (only if dual stack selected)
+    if [[ "$stack_choice" == "2" ]] && command -v ip6tables &> /dev/null; then
         ip6tables -t nat -N XRAY 2>/dev/null || ip6tables -t nat -F XRAY
-        # Note: IPv6 bypass rules don't include IPv4 addresses
-        ip6tables -t nat -A XRAY -p udp --dport 53 -j RETURN
-        ip6tables -t nat -A XRAY -p tcp --dport 53 -j RETURN
+
+        # Bypass xray's own traffic
+        if [[ "$xray_uid" != "0" ]]; then
+            ip6tables -t nat -A XRAY -m owner --uid-owner "$xray_uid" -j RETURN
+        fi
+
+        # Bypass local and private networks
+        ip6tables -t nat -A XRAY -d ::1/128 -j RETURN
+        ip6tables -t nat -A XRAY -d fc00::/7 -j RETURN
+        ip6tables -t nat -A XRAY -d fe80::/10 -j RETURN
+
+        # Redirect TCP traffic
         ip6tables -t nat -A XRAY -p tcp -j REDIRECT --to-ports ${TPROXY_PORT}
         ip6tables -t nat -A OUTPUT -j XRAY
+
+        print_info "IPv6 transparent proxy enabled"
     fi
 
     echo "iptables-enabled" > "${PROXY_STATE_FILE}.tproxy"
     print_success "Transparent proxy enabled with iptables"
-    print_info "Local TCP traffic will be proxied through port ${TPROXY_PORT} (dokodemo-door)"
-    print_info "Bypassed: proxy server, DNS, local networks"
+    print_info "Local TCP traffic will be proxied through port ${TPROXY_PORT}"
+    print_info "Bypassed: xray user, proxy server, local networks"
 }
 
 disable_transparent_proxy() {
@@ -491,6 +518,74 @@ test_proxy() {
     fi
 }
 
+# Setup xray user for transparent proxy
+setup_xray_user() {
+    check_root
+    print_info "Setting up xray user for transparent proxy..."
+
+    # Create xray user if not exists
+    if ! id xray &>/dev/null; then
+        print_info "Creating xray user..."
+        useradd -r -M -s /sbin/nologin xray
+        print_success "User 'xray' created"
+    else
+        print_info "User 'xray' already exists"
+    fi
+
+    # Find xray service file
+    local service_file=""
+    if [[ -f "/etc/systemd/system/xray.service" ]]; then
+        service_file="/etc/systemd/system/xray.service"
+    elif [[ -f "/usr/lib/systemd/system/xray.service" ]]; then
+        service_file="/usr/lib/systemd/system/xray.service"
+    elif [[ -f "/lib/systemd/system/xray.service" ]]; then
+        service_file="/lib/systemd/system/xray.service"
+    else
+        print_error "Xray service file not found"
+        print_info "Please install xray first or manually create the service file"
+        exit 1
+    fi
+
+    print_info "Found service file: $service_file"
+
+    # Check if User= already set
+    if grep -q "^User=" "$service_file"; then
+        local current_user=$(grep "^User=" "$service_file" | cut -d= -f2)
+        if [[ "$current_user" == "xray" ]]; then
+            print_info "Service already configured to run as xray user"
+        else
+            print_warning "Service currently runs as: $current_user"
+            read -p "Change to xray user? [y/N]: " confirm
+            [[ "$confirm" != "y" ]] && [[ "$confirm" != "Y" ]] && exit 0
+            sed -i 's/^User=.*/User=xray/' "$service_file"
+            print_success "Updated User to xray"
+        fi
+    else
+        # Add User= and Group= after [Service]
+        sed -i '/^\[Service\]/a User=xray\nGroup=xray' "$service_file"
+        print_success "Added User=xray and Group=xray to service file"
+    fi
+
+    # Set permissions
+    print_info "Setting permissions..."
+    chown -R xray:xray "$XRAY_CONFIG_DIR" 2>/dev/null || true
+    [[ -d "$XRAY_LOG_DIR" ]] && chown -R xray:xray "$XRAY_LOG_DIR" 2>/dev/null || true
+
+    # Reload and restart
+    print_info "Reloading systemd and restarting xray..."
+    systemctl daemon-reload
+    systemctl restart xray
+
+    if is_xray_running; then
+        print_success "Xray service restarted successfully as xray user"
+        print_info "Transparent proxy will now bypass xray's own traffic"
+    else
+        print_error "Failed to restart xray service"
+        print_info "Check logs: journalctl -u xray -n 50"
+        exit 1
+    fi
+}
+
 # Show usage
 show_usage() {
     cat <<EOF
@@ -527,6 +622,7 @@ ${YELLOW}Routing Mode:${NC}
 ${YELLOW}Configuration:${NC}
     config          Edit configuration file
     reload          Reload configuration without stopping
+    setup-user      Setup xray user for transparent proxy (prevent traffic loop)
 
 ${YELLOW}Utilities:${NC}
     test            Test proxy connection
@@ -707,6 +803,9 @@ main() {
             ;;
         config)
             ${EDITOR:-vi} "$XRAY_CONFIG_FILE"
+            ;;
+        setup-user)
+            setup_xray_user
             ;;
         reload)
             check_root

@@ -56,7 +56,7 @@ REQUIRED_FILES=(
     "xray-config-generator.sh"
     "xray-node-manager.sh"
     "xray-routing-mode.sh"
-    "tproxy-bypass.conf"
+    "tproxy-bypass.conf.sample"
 )
 
 # 创建临时目录
@@ -125,6 +125,13 @@ for file in "${REQUIRED_FILES[@]}"; do
     cp "$TEMP_DIR/$file" "$INSTALL_DIR/"
     echo "  ✓ 已安装: $file"
 done
+
+# 如果 tproxy-bypass.conf 不存在，从 sample 复制
+if [[ ! -f "$INSTALL_DIR/tproxy-bypass.conf" ]]; then
+    cp "$INSTALL_DIR/tproxy-bypass.conf.sample" "$INSTALL_DIR/tproxy-bypass.conf"
+    print_info "已创建默认配置: tproxy-bypass.conf"
+fi
+
 print_success "文件安装完成"
 
 # 添加执行权限
