@@ -137,8 +137,16 @@ load_bypass_config() {
 
     # Load config file if exists
     if [[ -f "$BYPASS_CONFIG" ]]; then
-        source "$BYPASS_CONFIG"
-        print_info "Loaded bypass configuration from $BYPASS_CONFIG"
+        set +e  # Don't exit on error
+        source "$BYPASS_CONFIG" 2>/dev/null
+        local result=$?
+        set -e
+
+        if [[ $result -eq 0 ]]; then
+            print_info "Loaded bypass configuration from $BYPASS_CONFIG"
+        else
+            print_warning "Failed to load bypass config, using defaults"
+        fi
     fi
 }
 
@@ -156,9 +164,10 @@ apply_bypass_rules() {
     # Bypass by user (IPv4 only)
     if [[ "$ip_version" == "ipv4" ]]; then
         for user in "${BYPASS_USERS[@]}"; do
+            [[ -z "$user" ]] && continue
             if id "$user" &>/dev/null; then
                 local uid=$(id -u "$user")
-                $ipt_cmd -t nat -A XRAY -m owner --uid-owner "$uid" -j RETURN
+                $ipt_cmd -t nat -A XRAY -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || true
                 print_info "Bypass rule added for user: $user (UID: $uid)"
                 ((rule_count++))
             else
@@ -168,30 +177,34 @@ apply_bypass_rules() {
 
         # Bypass by UID
         for uid in "${BYPASS_UIDS[@]}"; do
-            $ipt_cmd -t nat -A XRAY -m owner --uid-owner "$uid" -j RETURN
+            [[ -z "$uid" ]] && continue
+            $ipt_cmd -t nat -A XRAY -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || true
             print_info "Bypass rule added for UID: $uid"
             ((rule_count++))
         done
 
         # Bypass by destination IP
         for ip in "${BYPASS_IPS[@]}"; do
-            $ipt_cmd -t nat -A XRAY -d "$ip" -j RETURN
+            [[ -z "$ip" ]] && continue
+            $ipt_cmd -t nat -A XRAY -d "$ip" -j RETURN 2>/dev/null || true
             print_info "Bypass rule added for IP: $ip"
             ((rule_count++))
         done
 
         # Bypass by destination port
         for port in "${BYPASS_PORTS[@]}"; do
-            $ipt_cmd -t nat -A XRAY -p tcp --dport "$port" -j RETURN
-            $ipt_cmd -t nat -A XRAY -p udp --dport "$port" -j RETURN
+            [[ -z "$port" ]] && continue
+            $ipt_cmd -t nat -A XRAY -p tcp --dport "$port" -j RETURN 2>/dev/null || true
+            $ipt_cmd -t nat -A XRAY -p udp --dport "$port" -j RETURN 2>/dev/null || true
             print_info "Bypass rule added for port: $port"
             ((rule_count++))
         done
 
         # Bypass by source port
         for port in "${BYPASS_SOURCE_PORTS[@]}"; do
-            $ipt_cmd -t nat -A XRAY -p tcp --sport "$port" -j RETURN
-            $ipt_cmd -t nat -A XRAY -p udp --sport "$port" -j RETURN
+            [[ -z "$port" ]] && continue
+            $ipt_cmd -t nat -A XRAY -p tcp --sport "$port" -j RETURN 2>/dev/null || true
+            $ipt_cmd -t nat -A XRAY -p udp --sport "$port" -j RETURN 2>/dev/null || true
             print_info "Bypass rule added for source port: $port"
             ((rule_count++))
         done
